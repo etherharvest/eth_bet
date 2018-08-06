@@ -328,7 +328,7 @@ contract BetCycleBasic is Ownable {
 
     uint256 totalPool = address(this).balance;
     if ( 0 < winnerPool && winnerPool <= totalPool ) {
-      payout = totalPool.div(winnerPool);
+      payout = totalPool.mul(95).div(winnerPool);
     } else {
       payout = 0;
     }
@@ -367,7 +367,7 @@ contract BetCycleBasic is Ownable {
       public hasBet hasOutcome isClaimingPeriod hasNotClaimed hasWon
       returns (bool) {
     uint256 amount = _bets[msg.sender];
-    uint256 prize = amount.mul(payout);
+    uint256 prize = amount.mul(payout).div(100);
 
     _claimed[msg.sender] = true;
 

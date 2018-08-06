@@ -311,8 +311,6 @@ contract('BetCycleBasic', function (
   describe('can set outcome', function () {
 
     describe('when is owner', function () {
-      const e_bet = 1000000000000000000;
-
       beforeEach(async function () {
         // Betting period: Blocks (0, 4)
         // Publishing period: Blocks [4, 5)
@@ -322,11 +320,11 @@ contract('BetCycleBasic', function (
         // Block 0
         broker = await Broker.new(3, 4, 5, 6, {from: owner});
         // Block 1
-        await broker.bet('0x41', {from: first_gambler, value: e_bet});
+        await broker.bet('0x41', {from: first_gambler, value: 1000000000000000000});
         // Block 2
-        await broker.bet('0x42', {from: second_gambler, value: e_bet / 2});
+        await broker.bet('0x42', {from: second_gambler, value: 500000000000000000});
         // Block 3
-        await broker.bet('0x42', {from: third_gambler, value: e_bet / 3});
+        await broker.bet('0x42', {from: third_gambler, value: 250000000000000000});
       });
 
       it('sets payout and generates an Outcome event', async function () {
@@ -334,7 +332,7 @@ contract('BetCycleBasic', function (
         const tx = await broker.setOutcome(e_outcome, {from: owner});
 
         const payout = (await broker.payout()).toNumber();
-        assert.equal(payout, 2);
+        assert.equal(221, payout);
 
         const e = await expectEvent.inTransaction(tx, 'Outcome');
         assert.equal(e_outcome, e.args.outcome);
@@ -479,7 +477,6 @@ contract('BetCycleBasic', function (
 
   describe('can claim prize', function () {
     describe('when gambler won', function () {
-      const e_bet = 1000000000000000000;
 
       beforeEach(async function () {
         // Betting period: Blocks (0, 4)
@@ -490,20 +487,21 @@ contract('BetCycleBasic', function (
         // Block 0
         broker = await Broker.new(3, 4, 5, 7, {from: owner});
         // Block 1
-        await broker.bet('0x41', {from: first_gambler, value: e_bet})
+        await broker.bet('0x41', {from: first_gambler, value: 1000000000000000000});
         // Block 2
-        await broker.bet('0x42', {from: second_gambler, value: e_bet / 2})
+        await broker.bet('0x42', {from: second_gambler, value: 500000000000000000})
         // Block 3
-        await broker.bet('0x42', {from: third_gambler, value: e_bet / 3})
+        await broker.bet('0x42', {from: third_gambler, value: 250000000000000000})
         // Block 4
         await broker.setOutcome('0x42', {from: owner});
       });
 
       it('generates a ClaimedPrize event', async function () {
         const payout = (await broker.payout()).toNumber();
+        const bet = (await broker.getBet(second_gambler)).toNumber();
+        const prize = (payout * bet) / 100;
         // Block 5
         const tx = await broker.claim({from: second_gambler});
-        const prize = payout * e_bet / 2;
 
         const e = await expectEvent.inTransaction(tx, 'ClaimedPrize');
         assert.equal(second_gambler, e.args.winner);
@@ -512,13 +510,14 @@ contract('BetCycleBasic', function (
 
       it('sends the prize to the winner', async function () {
         const payout = (await broker.payout()).toNumber();
+        const bet = (await broker.getBet(second_gambler)).toNumber();
+        const prize = (payout * bet) / 100;
         // Block 5
         const before = (await getBalance(second_gambler)).toNumber();
         const tx = await broker.claim({from: second_gambler});
         const after = (await getBalance(second_gambler)).toNumber();
         const gas = tx.receipt.gasUsed;
         const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice.toNumber();
-        const prize = payout * e_bet / 2;
 
         assert.equal(before - gas * gasPrice + prize, after);
       });
