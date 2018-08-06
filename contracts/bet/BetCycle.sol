@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity 0.4.24;
 
 import "../bet/BetCycleBasic.sol";
 
@@ -23,12 +23,12 @@ contract BetCycle is BetCycleBasic {
     uint256 publishingOffset,
     uint256 claimingOffset,
     uint256 endingOffset
-  ) BetCycleBasic(
+  ) public BetCycleBasic(
       bettingOffset,
       publishingOffset,
       claimingOffset,
       endingOffset
-  ) public {}
+  ) {}
 
   ///////////////////////////
   // Betting period functions
@@ -43,8 +43,14 @@ contract BetCycle is BetCycleBasic {
     bytes32 oldPrediction = _predictions[msg.sender];
     uint256 amount = _bets[msg.sender];
 
-    require( newPrediction != 0x0 );
-    require( newPrediction != oldPrediction );
+    require(
+      newPrediction != 0x0,
+      "The prediction is empty."
+    );
+    require(
+      newPrediction != oldPrediction,
+      "The prediction cannot be the same."
+    );
 
     _predictions[msg.sender] = newPrediction;
     _count[newPrediction] = _count[newPrediction].add(amount);
@@ -70,7 +76,10 @@ contract BetCycle is BetCycleBasic {
     bytes32 prediction = _predictions[msg.sender];
     uint256 oldBet = _bets[msg.sender];
 
-    require( msg.value > 0 );
+    require(
+      msg.value > 0,
+      "Insufficient amount of Ether sent."
+    );
 
     uint256 newBet = oldBet.add(msg.value);
 
@@ -92,8 +101,14 @@ contract BetCycle is BetCycleBasic {
     bytes32 prediction = _predictions[msg.sender];
     uint256 oldBet = _bets[msg.sender];
 
-    require( amount > 0 );
-    require( amount <= oldBet );
+    require(
+      amount > 0,
+      "The decremented amount must be greater than zero."
+    );
+    require(
+      amount <= oldBet,
+      "The decremented amount cannot exceed the bet amount"
+    );
 
     uint256 count = _count[prediction].sub(amount);
     if ( count == 0 ) {

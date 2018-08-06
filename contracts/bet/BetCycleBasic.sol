@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity 0.4.24;
 
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
@@ -102,7 +102,10 @@ contract BetCycleBasic is Ownable {
    * @dev When is on the betting period (∞, bettingBlock].
    */
   modifier isBettingPeriod() {
-    require( block.number <= bettingBlock );
+    require(
+      block.number <= bettingBlock,
+      "The betting period has already ended."
+    );
     _;
   }
 
@@ -110,7 +113,10 @@ contract BetCycleBasic is Ownable {
    * @dev When is on the publishing period [publishingBlock, claimingBlock).
    */
   modifier isPublishingPeriod() {
-    require( publishingBlock <= block.number && block.number < claimingBlock);
+    require(
+      publishingBlock <= block.number && block.number < claimingBlock,
+      "It is not the publishing period."
+    );
     _;
   }
 
@@ -118,7 +124,10 @@ contract BetCycleBasic is Ownable {
    * @dev When is on the claiming period [claimingBlock, endingBlock).
    */
   modifier isClaimingPeriod() {
-    require( claimingBlock <= block.number && block.number < endingBlock );
+    require(
+      claimingBlock <= block.number && block.number < endingBlock,
+      "It is not the claiming period."
+    );
     _;
   }
 
@@ -126,7 +135,10 @@ contract BetCycleBasic is Ownable {
    * @dev When the betting cycle has ended [endingBlock, ∞).
    */
   modifier hasEnded() {
-    require( endingBlock <= block.number );
+    require(
+      endingBlock <= block.number,
+      "The bet has not ended."
+    );
     _;
   }
 
@@ -134,7 +146,10 @@ contract BetCycleBasic is Ownable {
    * @dev When has outcome.
    */
   modifier hasOutcome() {
-    require( outcome != 0x0 );
+    require(
+      outcome != 0x0,
+      "There is no outcome yet."
+    );
     _;
   }
 
@@ -142,7 +157,10 @@ contract BetCycleBasic is Ownable {
    * @dev When has not outcome.
    */
   modifier hasNoOutcome() {
-    require( outcome == 0x0 );
+    require(
+      outcome == 0x0,
+      "There is already an outcome."
+    );
     _;
   }
 
@@ -150,7 +168,10 @@ contract BetCycleBasic is Ownable {
    * @dev When the prize or the refund has not been claimed.
    */
   modifier hasNotClaimed() {
-    require( !_claimed[msg.sender] );
+    require(
+      !_claimed[msg.sender],
+      "The ether was already claimed."
+    );
     _;
   }
 
@@ -158,7 +179,10 @@ contract BetCycleBasic is Ownable {
    * @dev When the gambler has won.
    */
   modifier hasWon() {
-    require( _predictions[msg.sender] == outcome );
+    require(
+      _predictions[msg.sender] == outcome,
+      "The sender did not win the bet."
+    );
     _;
   }
 
@@ -189,8 +213,14 @@ contract BetCycleBasic is Ownable {
    * @dev When the gambler has not bet.
    */
   modifier hasNotBet() {
-    require( _bets[msg.sender] == 0 );          // Has not bet
-    require( _predictions[msg.sender] == 0x0 ); // Has no valid prediction
+    require(
+      _bets[msg.sender] == 0,
+      "The sender has already bet."
+    );
+    require(
+      _predictions[msg.sender] == 0x0,
+      "The sender has already a valid prediction."
+    );
     _;
   }
 
@@ -198,10 +228,21 @@ contract BetCycleBasic is Ownable {
    * @dev When the gambler has bet.
    */
   modifier hasBet() {
-    require( _bets[msg.sender] > 0 );           // Has a bet
-    require( _predictions[msg.sender] != 0x0 ); // Has valid prediction
+    require(
+      _bets[msg.sender] > 0,
+      "The sender has not bet yet."
+    );
+    require(
+      _predictions[msg.sender] != 0x0,
+      "The sender does not have a valid prediction."
+    );
     _;
   }
+
+  /**
+   * @dev This contract does not accept payments via send or transfer.
+   */
+  function () public {}
 
   /**
    * @dev Given offsets, starts a betting cycle.
@@ -219,9 +260,18 @@ contract BetCycleBasic is Ownable {
     uint256 claimingOffset,
     uint256 endingOffset
   ) public {
-    require(bettingOffset < publishingOffset);
-    require(publishingOffset < claimingOffset);
-    require(claimingOffset < endingOffset);
+    require(
+      bettingOffset < publishingOffset,
+      "The publishing offset must be greater than the betting offset."
+    );
+    require(
+      publishingOffset < claimingOffset,
+      "The claiming offset must be greater than the publishing offset."
+    );
+    require(
+      claimingOffset < endingOffset,
+      "The ending offset must be greater than the claiming offset."
+    );
 
     bettingBlock = block.number.add(bettingOffset);
     publishingBlock = block.number.add(publishingOffset);
@@ -272,8 +322,14 @@ contract BetCycleBasic is Ownable {
    */
   function bet(bytes32 prediction)
       public hasNotBet isBettingPeriod payable returns (bool) {
-    require( prediction != 0x0 );
-    require( msg.value > 0 );
+    require(
+      prediction != 0x0,
+      "The prediction must not be empty."
+    );
+    require(
+      msg.value > 0,
+      "The ether sent must be greater than zero."
+    );
 
     _bets[msg.sender] = msg.value;
     _predictions[msg.sender] = prediction;
@@ -322,7 +378,10 @@ contract BetCycleBasic is Ownable {
       public onlyOwner hasNoOutcome isPublishingPeriod returns (bool) {
     uint256 winnerPool = _count[_outcome];
 
-    require( _outcome != 0x0 );
+    require(
+      _outcome != 0x0,
+      "Outcome cannot be empty."
+    );
 
     outcome = _outcome;
 
@@ -346,7 +405,10 @@ contract BetCycleBasic is Ownable {
    * @return Whether the ether was returned or not.
    */
   function refund() public hasBet hasNoOutcome hasNotClaimed returns (bool) {
-    require( claimingBlock <= block.number );
+    require(
+      claimingBlock <= block.number,
+      "No refunds yet available."
+    );
 
     uint256 amount = getBet(msg.sender);
 
@@ -388,7 +450,10 @@ contract BetCycleBasic is Ownable {
    */
   function endBetCycle(address destination)
       public onlyOwner hasOutcome hasEnded returns (bool) {
-    require( destination != address(0x0) );
+    require(
+      destination != address(0x0),
+      "Destination address cannot be zero address"
+    );
 
     destination.transfer(address(this).balance);
 

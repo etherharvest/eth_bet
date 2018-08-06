@@ -11,7 +11,7 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 var Broker = artifacts.require('BetCycle');
 
-contract('BetCycle', function ([_, owner, gambler]) {
+contract('BetCycle', function ([_, owner, gambler, other_gambler]) {
   const no_outcome = '0x0000000000000000000000000000000000000000000000000000000000000000';
   const no_prediction = '0x0000000000000000000000000000000000000000000000000000000000000000';
   const e_outcome = '0x4200000000000000000000000000000000000000000000000000000000000000';
@@ -46,17 +46,30 @@ contract('BetCycle', function ([_, owner, gambler]) {
     it('changes the support of a prediction', async function () {
       // Block 1
       await broker.bet('0x41', {from: gambler, value: e_bet});
-      const old_prediction_before = (await broker.getSupport('0x41')).toNumber();
-      const new_prediction_before = (await broker.getSupport('0x42')).toNumber();
+      const old_prediction_before = await broker.getSupport('0x41');
+      const new_prediction_before = await broker.getSupport('0x42');
       // Block 2
       await broker.changePrediction('0x42', {from: gambler})
-      const old_prediction_after = (await broker.getSupport('0x41')).toNumber();
-      const new_prediction_after = (await broker.getSupport('0x42')).toNumber();
+      const old_prediction_after = await broker.getSupport('0x41');
+      const new_prediction_after = await broker.getSupport('0x42');
 
-      assert.equal(old_prediction_before, e_bet);
-      assert.equal(new_prediction_before, 0);
-      assert.equal(old_prediction_after, 0);
-      assert.equal(new_prediction_after, e_bet);
+      assert.isTrue(old_prediction_before.eq(e_bet));
+      assert.isTrue(new_prediction_before.eq(0));
+      assert.isTrue(old_prediction_after.eq(0));
+      assert.isTrue(new_prediction_after.eq(e_bet));
+    });
+
+    it('changes the support of a prediction to non zero', async function () {
+      // Block 1
+      await broker.bet('0x41', {from: other_gambler, value: e_bet});
+      // Block 2
+      await broker.bet('0x41', {from: gambler, value: e_bet});
+      const prediction_before = await broker.getSupport('0x41');
+      // Block 3
+      await broker.changePrediction('0x42', {from: gambler})
+      const prediction_after = await broker.getSupport('0x41');
+
+      assert.isTrue(prediction_before.minus(prediction_after).eq(e_bet));
     });
 
     it('generates a Bet event with the update', async function () {
@@ -152,13 +165,13 @@ contract('BetCycle', function ([_, owner, gambler]) {
     it('changes support for the prediction', async function () {
       // Block 1
       await broker.bet('0x41', {from: gambler, value: e_bet});
-      const prediction_before = (await broker.getSupport('0x41')).toNumber();
+      const prediction_before = await broker.getSupport('0x41');
       // Block 2
       await broker.increaseBet({from: gambler, value: e_bet})
-      const prediction_after = (await broker.getSupport('0x41')).toNumber();
+      const prediction_after = await broker.getSupport('0x41');
 
-      assert.equal(prediction_before, e_bet);
-      assert.equal(prediction_after, e_bet * 2);
+      assert.isTrue(prediction_before.eq(e_bet));
+      assert.isTrue(prediction_after.eq(e_bet * 2));
     });
 
     it('generates a Bet event with the update', async function () {
@@ -242,19 +255,19 @@ contract('BetCycle', function ([_, owner, gambler]) {
       // Block 2
       await broker.decreaseBet(e_decrease, {from: gambler});
 
-      const bet = (await broker.getBet(gambler)).toNumber();
+      const bet = await broker.getBet(gambler);
 
-      assert.equal(expected, bet);
+      assert.isTrue(bet.eq(expected));
     });
 
     it('decreases the support for the prediction', async function () {
-      const prediction_before = (await broker.getSupport(e_prediction)).toNumber();
-      const expected = prediction_before - e_decrease;
+      const prediction_before = await broker.getSupport(e_prediction);
+      const expected = prediction_before.minus(e_decrease);
       // Block 2
       await broker.decreaseBet(e_decrease, {from: gambler});
-      const prediction_after = (await broker.getSupport(e_prediction)).toNumber();
+      const prediction_after = await broker.getSupport(e_prediction);
 
-      assert.equal(expected, prediction_after)
+      assert.isTrue(prediction_after.eq(expected));
     });
 
     it('generates a Bet event with the update', async function () {
@@ -268,15 +281,18 @@ contract('BetCycle', function ([_, owner, gambler]) {
     });
 
     it('returns the excess to the gambler', async function () {
-      const before = (await getBalance(gambler)).toNumber();
+      const before = await getBalance(gambler);
       // Block 2
       const tx = await broker.decreaseBet(e_decrease, {from: gambler});
-      const after = (await getBalance(gambler)).toNumber();
+      const after = await getBalance(gambler);
       const gas = tx.receipt.gasUsed;
-      const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice.toNumber();
+      const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice;
       const expected = e_decrease - gas * gasPrice + before;
 
-      assert(after + gas * gasPrice > before);
+      // before - gas * gas_price + decrease == after
+      assert.isTrue(
+        before.minus(gasPrice.times(gas)).plus(e_decrease).eq(after)
+      );
     });
   });
 
@@ -301,19 +317,19 @@ contract('BetCycle', function ([_, owner, gambler]) {
       // Block 2
       await broker.decreaseBet(e_bet, {from: gambler});
 
-      const bet = (await broker.getBet(gambler)).toNumber();
+      const bet = await broker.getBet(gambler);
       const prediction = await broker.getPrediction(gambler);
 
-      assert.equal(bet, 0);
+      assert.isTrue(bet.eq(0));
       assert.equal(no_prediction, prediction);
     });
 
     it('decreases the support for the prediction', async function () {
       // Block 2
       await broker.decreaseBet(e_bet, {from: gambler});
-      const support = (await broker.getSupport(e_prediction)).toNumber();
+      const support = await broker.getSupport(e_prediction);
 
-      assert.equal(support, 0)
+      assert.isTrue(support.eq(0));
     });
 
     it('generates a BetCancelled event with the update', async function () {
@@ -364,6 +380,20 @@ contract('BetCycle', function ([_, owner, gambler]) {
       timeTravel(2);
       // Block 4
       await assertRevert(broker.decreaseBet(e_decrease, {from: gambler}));
+    });
+
+    it('when the decremented amount is zero', async function () {
+      // Block 1
+      await broker.bet(e_prediction, {from: gambler, value: e_bet});
+      // Block 2
+      await assertRevert(broker.decreaseBet(0, {from: gambler}));
+    });
+
+    it('when amount exceeds the bet', async function () {
+      // Block 1
+      await broker.bet(e_prediction, {from: gambler, value: 1});
+      // Block 2
+      await assertRevert(broker.decreaseBet(2, {from: gambler}));
     });
   });
 });

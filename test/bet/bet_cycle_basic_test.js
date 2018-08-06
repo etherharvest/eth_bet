@@ -199,24 +199,27 @@ contract('BetCycleBasic', function (
       // Ending period: Blocks [5, ∞)
 
       // Block 0
-      broker = await Broker.new(2, 3, 4, 5, {from: owner});
+      broker = await Broker.new(3, 4, 5, 6, {from: owner});
     });
 
     describe('when the gambler has a bet', function () {
       it('returns the bet ether to the gambler', async function () {
         // Block 1
         await broker.bet(e_prediction, {from: first_gambler, value: e_bet});
-        const before = (await getBalance(first_gambler)).toNumber();
+        const before = await getBalance(first_gambler);
         // Block 2
         const tx = await broker.cancelBet({from: first_gambler});
-        const after = (await getBalance(first_gambler)).toNumber();
+        const after = await getBalance(first_gambler);
         const gas = tx.receipt.gasUsed;
-        const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice.toNumber();
+        const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice;
 
-        assert.equal(before - gas * gasPrice + e_bet, after);
+        // before - (gas * gas_price) + bet == after
+        assert.isTrue(
+          before.minus(gasPrice.times(gas)).plus(e_bet).eq(after)
+        );
       });
 
-      it('generates a BetCancelled event', async function() {
+      it('generates a BetCancelled event', async function () {
         // Block 1
         await broker.bet(e_prediction, {from: first_gambler, value: e_bet});
         // Block 2
@@ -228,14 +231,27 @@ contract('BetCycleBasic', function (
         assert.equal(e_bet, e.args.bet);
       });
 
+      it('decreases support for a prediction', async function () {
+        // Block 1
+        await broker.bet(e_prediction, {from: first_gambler, value: e_bet});
+        // Block 2
+        await broker.bet(e_prediction, {from: second_gambler, value: e_bet});
+        const oldSupport = await broker.getSupport(e_prediction);
+        // Block 3
+        const tx = await broker.cancelBet({from: first_gambler});
+        const newSupport = await broker.getSupport(e_prediction);
+
+        assert.isTrue(oldSupport.minus(newSupport).eq(e_bet));
+      });
+
       it('resets the gambler\'s bet to zero', async function () {
         // Block 1
         await broker.bet(e_prediction, {from: first_gambler, value: e_bet});
         // Block 2
         await broker.cancelBet({from: first_gambler});
 
-        const bet = (await broker.getBet(first_gambler)).toNumber();
-        assert.equal(0, bet);
+        const bet = await broker.getBet(first_gambler);
+        assert.isTrue(bet.eq(0));
       });
 
       it('resets the gambler\'s prediction to 0x0', async function () {
@@ -254,8 +270,8 @@ contract('BetCycleBasic', function (
         // Block 2
         await broker.cancelBet({from: first_gambler});
 
-        const balance = (await getBalance(broker.address)).toNumber();
-        assert.equal(0, balance);
+        const balance = await getBalance(broker.address);
+        assert.isTrue(balance.eq(0));
       });
 
       it('decreases support by one to the gambler\'s prediction', async function () {
@@ -264,15 +280,15 @@ contract('BetCycleBasic', function (
         // Block 2
         await broker.cancelBet({from: first_gambler});
 
-        const support = (await broker.getSupport(e_prediction)).toNumber();
-        assert.equal(0, support);
+        const support = await broker.getSupport(e_prediction);
+        assert.isTrue(support.eq(0));
       });
     });
   });
 
   describe('cannot cancel bet', function () {
     const e_prediction = '0x4100000000000000000000000000000000000000000000000000000000000000';
-    const e_bet = 1000000000000000000;
+    const e_bet = '1000000000000000000';
 
     beforeEach(async function () {
       // Betting period: Blocks (0, 4)
@@ -309,6 +325,8 @@ contract('BetCycleBasic', function (
   });
 
   describe('can set outcome', function () {
+    const commission = 5;
+    let e_payout;
 
     describe('when is owner', function () {
       beforeEach(async function () {
@@ -320,19 +338,22 @@ contract('BetCycleBasic', function (
         // Block 0
         broker = await Broker.new(3, 4, 5, 6, {from: owner});
         // Block 1
-        await broker.bet('0x41', {from: first_gambler, value: 1000000000000000000});
+        await broker.bet('0x41', {from: first_gambler, value: '1000000000000000000'});
         // Block 2
-        await broker.bet('0x42', {from: second_gambler, value: 500000000000000000});
+        await broker.bet('0x42', {from: second_gambler, value: '500000000000000000'});
         // Block 3
-        await broker.bet('0x42', {from: third_gambler, value: 250000000000000000});
+        await broker.bet('0x42', {from: third_gambler, value: '250000000000000000'});
+
+        pool = await getBalance(broker.address);
+        e_payout = pool.times(100 - commission).dividedToIntegerBy('750000000000000000');
       });
 
       it('sets payout and generates an Outcome event', async function () {
         //Block 4
         const tx = await broker.setOutcome(e_outcome, {from: owner});
 
-        const payout = (await broker.payout()).toNumber();
-        assert.equal(221, payout);
+        const payout = (await broker.payout()).toString();
+        assert.equal(e_payout, payout);
 
         const e = await expectEvent.inTransaction(tx, 'Outcome');
         assert.equal(e_outcome, e.args.outcome);
@@ -368,6 +389,13 @@ contract('BetCycleBasic', function (
       await broker.setOutcome(e_outcome, {from: owner});
       //Block 3
       await assertRevert(broker.setOutcome('0x41', {from: owner}));
+    });
+
+    it('when outcome is not valid', async function () {
+      //Block 1
+      await timeTravel(1);
+      //Block 2
+      await assertRevert(broker.setOutcome('0x0', {from: owner}));
     });
 
     it('when is in the betting period', async function () {
@@ -406,14 +434,17 @@ contract('BetCycleBasic', function (
       });
 
       it('refunds the ether to the gambler', async function() {
-        const before = (await getBalance(first_gambler)).toNumber();
+        const before = await getBalance(first_gambler);
         // Block 5
         const tx = await broker.refund({from: first_gambler});
-        const after = (await getBalance(first_gambler)).toNumber();
+        const after = await getBalance(first_gambler);
         const gas = tx.receipt.gasUsed;
-        const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice.toNumber();
+        const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice;
 
-        assert.equal(before - gas * gasPrice + e_bet, after);
+        // before - gas * gas_price + bet == after
+        assert.isTrue(
+          before.minus(gasPrice.times(gas)).plus(e_bet).eq(after)
+        );
       });
 
       it('generates a Refund event', async function () {
@@ -487,39 +518,42 @@ contract('BetCycleBasic', function (
         // Block 0
         broker = await Broker.new(3, 4, 5, 7, {from: owner});
         // Block 1
-        await broker.bet('0x41', {from: first_gambler, value: 1000000000000000000});
+        await broker.bet('0x41', {from: first_gambler, value: '1000000000000000000'});
         // Block 2
-        await broker.bet('0x42', {from: second_gambler, value: 500000000000000000})
+        await broker.bet('0x42', {from: second_gambler, value: '500000000000000000'})
         // Block 3
-        await broker.bet('0x42', {from: third_gambler, value: 250000000000000000})
+        await broker.bet('0x42', {from: third_gambler, value: '250000000000000000'})
         // Block 4
         await broker.setOutcome('0x42', {from: owner});
       });
 
       it('generates a ClaimedPrize event', async function () {
-        const payout = (await broker.payout()).toNumber();
-        const bet = (await broker.getBet(second_gambler)).toNumber();
-        const prize = (payout * bet) / 100;
+        const payout = await broker.payout();
+        const bet = await broker.getBet(second_gambler);
+        const prize = payout.times(bet).dividedToIntegerBy(100);
         // Block 5
         const tx = await broker.claim({from: second_gambler});
 
         const e = await expectEvent.inTransaction(tx, 'ClaimedPrize');
         assert.equal(second_gambler, e.args.winner);
-        assert.equal(prize, e.args.prize);
+        assert.isTrue(prize.eq(e.args.prize));
       });
 
       it('sends the prize to the winner', async function () {
-        const payout = (await broker.payout()).toNumber();
-        const bet = (await broker.getBet(second_gambler)).toNumber();
-        const prize = (payout * bet) / 100;
+        const payout = await broker.payout();
+        const bet = await broker.getBet(second_gambler);
+        const prize = payout.times(bet).dividedToIntegerBy(100);
         // Block 5
-        const before = (await getBalance(second_gambler)).toNumber();
+        const before = await getBalance(second_gambler);
         const tx = await broker.claim({from: second_gambler});
-        const after = (await getBalance(second_gambler)).toNumber();
+        const after = await getBalance(second_gambler);
         const gas = tx.receipt.gasUsed;
-        const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice.toNumber();
+        const gasPrice = (await web3.eth.getTransaction(tx.tx)).gasPrice;
 
-        assert.equal(before - gas * gasPrice + prize, after);
+        // before - gas * gas_price + prize == after
+        assert.isTrue(
+          before.minus(gasPrice.times(gas)).plus(prize).eq(after)
+        );
       });
     });
   });
@@ -605,12 +639,13 @@ contract('BetCycleBasic', function (
         // Block 3
         await timeTravel(1);
         // Block 4
-        const before = (await getBalance(destination)).toNumber();
-        const remaining = (await getBalance(broker.address)).toNumber();
+        const before = await getBalance(destination);
+        const remaining = await getBalance(broker.address);
         const tx = await broker.endBetCycle(destination, {from: owner});
-        const after = (await getBalance(destination)).toNumber();
+        const after = await getBalance(destination);
 
-        assert.equal(before + remaining, after);
+        // before + remaining == after
+        assert.isTrue(before.plus(remaining).eq(after));
       });
     });
   });
