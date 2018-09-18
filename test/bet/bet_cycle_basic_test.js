@@ -22,7 +22,7 @@ contract('BetCycleBasic', function (
   describe('creates a bet cycle', function () {
 
     beforeEach(async function () {
-      broker = await Broker.new(1, 2, 3, 4, {from: owner});
+      broker = await Broker.new(5, 1, 2, 3, 4, {from: owner});
     });
 
     it('when all offsets are valid', async function () {
@@ -45,21 +45,30 @@ contract('BetCycleBasic', function (
       assert.equal(outcome, no_outcome);
       assert.equal(payout, 0);
     });
+
+    it('when commission is valid', async function () {
+      const prizeBase = parseInt(await broker.prizeBase(), 10);
+      assert.equal(prizeBase + 5, 100);
+    });
   });
 
   describe('cannot create a bet cycle', function () {
 
     it('when betting offset is greater than publishing offset', async function () {
-      await assertRevert(Broker.new(2, 1, 3, 4, {from: owner}));
+      await assertRevert(Broker.new(5, 2, 1, 3, 4, {from: owner}));
     });
 
     it('when publishing offset is greater than claiming offset', async function () {
-      await assertRevert(Broker.new(1, 3, 2, 4, {from: owner}));
+      await assertRevert(Broker.new(5, 1, 3, 2, 4, {from: owner}));
     });
 
     it('when claiming offset is greater than ending offset', async function () {
-      await assertRevert(Broker.new(1, 2, 4, 3, {from: owner}));
+      await assertRevert(Broker.new(5, 1, 2, 4, 3, {from: owner}));
     });
+
+    it('when commission is greater than 100', async function () {
+      await assertRevert(Broker.new(101, 1, 2, 3, 4, {from: owner}));
+    })
   });
 
   describe('can create a bet', function () {
@@ -71,13 +80,14 @@ contract('BetCycleBasic', function (
     describe('when gambler has not bet before', function() {
 
       beforeEach(async function () {
+        // Commission: 5%
         // Betting period: Blocks (0, 2)
         // Publishing period: Blocks [2, 3)
         // Claiming period: Blocks [3, 4)
         // Ending period: Blocks [4, ∞)
 
         // Block 0
-        broker = await Broker.new(1, 2, 3, 4, {from: owner});
+        broker = await Broker.new(5, 1, 2, 3, 4, {from: owner});
       });
 
       it('generates an Bet event', async function () {
@@ -146,13 +156,14 @@ contract('BetCycleBasic', function (
     const e_support = 1;
 
     beforeEach(async function () {
+      // Commission: 5%
       // Betting period: Blocks (0, 3)
       // Publishing period: Blocks [3, 4)
       // Claiming period: Blocks [4, 5)
       // Ending period: Blocks [5, ∞)
 
       // Block 0
-      broker = await Broker.new(2, 3, 4, 5, {from: owner});
+      broker = await Broker.new(5, 2, 3, 4, 5, {from: owner});
     });
 
     it('when the gambler already bet', async function () {
@@ -193,13 +204,14 @@ contract('BetCycleBasic', function (
     const e_support = 1;
 
     beforeEach(async function () {
+      // Commission: 5%
       // Betting period: Blocks (0, 3)
       // Publishing period: Blocks [3, 4)
       // Claiming period: Blocks [4, 5)
       // Ending period: Blocks [5, ∞)
 
       // Block 0
-      broker = await Broker.new(3, 4, 5, 6, {from: owner});
+      broker = await Broker.new(5, 3, 4, 5, 6, {from: owner});
     });
 
     describe('when the gambler has a bet', function () {
@@ -291,13 +303,14 @@ contract('BetCycleBasic', function (
     const e_bet = '1000000000000000000';
 
     beforeEach(async function () {
+      // Commission: 5%
       // Betting period: Blocks (0, 4)
       // Publishing period: Blocks [4, 5)
       // Claiming period: Blocks [5, 6)
       // Ending period: Blocks [6, ∞)
 
       // Block 0
-      broker = await Broker.new(3, 4, 5, 6, {from: owner});
+      broker = await Broker.new(5, 3, 4, 5, 6, {from: owner});
     });
 
     it('when the gambler does not have a bet', async function () {
@@ -330,13 +343,14 @@ contract('BetCycleBasic', function (
 
     describe('when is owner', function () {
       beforeEach(async function () {
+        // Commission: 5%
         // Betting period: Blocks (0, 4)
         // Publishing period: Blocks [4, 5)
         // Claiming period: Blocks [5, 6)
         // Ending period: Blocks [6, ∞)
 
         // Block 0
-        broker = await Broker.new(3, 4, 5, 6, {from: owner});
+        broker = await Broker.new(5, 3, 4, 5, 6, {from: owner});
         // Block 1
         await broker.bet('0x41', {from: first_gambler, value: '1000000000000000000'});
         // Block 2
@@ -360,53 +374,85 @@ contract('BetCycleBasic', function (
         assert.equal(payout, e.args.payout);
       });
     });
+
+    describe('when there is only one participant', function () {
+      e_empty = '0x0000000000000000000000000000000000000000000000000000000000000000';
+
+      beforeEach(async function () {
+        // Commission: 5%
+        // Betting period: Blocks (0, 4)
+        // Publishing period: Blocks [4, 5)
+        // Claiming period: Blocks [5, 6)
+        // Ending period: Blocks [6, ∞)
+
+        // Block 0
+        broker = await Broker.new(5, 1, 2, 3, 4, {from: owner});
+        // Block 1
+        await broker.bet('0x42', {from: first_gambler, value: '1000000000000000000'});
+      });
+
+      it('cannot set outcome (forces refund)', async function () {
+        //Block 2
+        const tx = await broker.setOutcome(e_outcome, {from: owner});
+
+        const outcome = (await broker.outcome()).toString();
+        assert.equal(e_empty, outcome);
+      });
+    });
   });
 
   describe('cannot set outcome', function () {
     const e_bet = 1000000000000000000;
 
     beforeEach(async function () {
+      // Commission: 5%
       // Betting period: Blocks (0, 2)
       // Publishing period: Blocks [2, 4)
       // Claiming period: Blocks [4, 5)
       // Ending period: Blocks [5, ∞)
 
       // Block 0
-      broker = await Broker.new(1, 2, 4, 5, {from: owner});
+      broker = await Broker.new(5, 4, 5, 7, 8, {from: owner});
+      // Block 1
+      await broker.bet('0x41', {from: first_gambler, value: '1000000000000000000'});
+      // Block 2
+      await broker.bet('0x42', {from: second_gambler, value: '500000000000000000'});
+      // Block 3
+      await broker.bet('0x42', {from: third_gambler, value: '250000000000000000'});
     });
 
     it('when is not owner', async function () {
-      //Block 1
+      //Block 4
       await timeTravel(1);
-      //Block 2
+      //Block 5
       await assertRevert(broker.setOutcome(e_outcome));
     });
 
     it('when already has an outcome', async function () {
-      //Block 1
+      //Block 4
       await timeTravel(1);
-      //Block 2
+      //Block 5
       await broker.setOutcome(e_outcome, {from: owner});
-      //Block 3
+      //Block 6
       await assertRevert(broker.setOutcome('0x41', {from: owner}));
     });
 
     it('when outcome is not valid', async function () {
-      //Block 1
+      //Block 4
       await timeTravel(1);
-      //Block 2
+      //Block 5
       await assertRevert(broker.setOutcome('0x0', {from: owner}));
     });
 
     it('when is in the betting period', async function () {
-      //Block 1
+      //Block 4
       await assertRevert(broker.setOutcome(e_outcome, {from: owner}));
     });
 
     it('when is in the claiming period', async function () {
-      //Block 1, 2, 3
+      //Block 4, 5, 6
       await timeTravel(3);
-      //Block 4
+      //Block 7
       await assertRevert(broker.setOutcome(e_outcome, {from: owner}));
     });
   });
@@ -416,13 +462,14 @@ contract('BetCycleBasic', function (
       const e_bet = 1000000000000000000;
 
       beforeEach(async function () {
+        // Commission: 5%
         // Betting period: Blocks (0, 4)
         // Publishing period: Blocks [4, 5)
         // Claiming period: Blocks [5, 6)
         // Ending period: Blocks [6, ∞)
 
         // Block 0
-        broker = await Broker.new(3, 4, 5, 6, {from: owner});
+        broker = await Broker.new(5, 3, 4, 5, 6, {from: owner});
         // Block 1
         await broker.bet('0x41', {from: first_gambler, value: e_bet});
         // Block 2
@@ -462,13 +509,14 @@ contract('BetCycleBasic', function (
     const e_bet = 1000000000000000000;
 
     beforeEach(async function () {
+      // Commission: 5%
       // Betting period: Blocks (0, 4)
       // Publishing period: Blocks [4, 5)
       // Claiming period: Blocks [5, 6)
       // Ending period: Blocks [6, ∞)
 
       // Block 0
-      broker = await Broker.new(3, 4, 5, 6, {from: owner});
+      broker = await Broker.new(5, 3, 4, 5, 6, {from: owner});
       // Block 1
       await broker.bet('0x41', {from: first_gambler, value: e_bet});
       // Block 2
@@ -510,13 +558,14 @@ contract('BetCycleBasic', function (
     describe('when gambler won', function () {
 
       beforeEach(async function () {
+        // Commission: 5%
         // Betting period: Blocks (0, 4)
         // Publishing period: Blocks [4, 5)
         // Claiming period: Blocks [5, 7)
         // Ending period: Blocks [7, ∞)
 
         // Block 0
-        broker = await Broker.new(3, 4, 5, 7, {from: owner});
+        broker = await Broker.new(5, 3, 4, 5, 7, {from: owner});
         // Block 1
         await broker.bet('0x41', {from: first_gambler, value: '1000000000000000000'});
         // Block 2
@@ -562,13 +611,14 @@ contract('BetCycleBasic', function (
     const e_bet = 1000000000000000000;
 
     beforeEach(async function () {
+      // Commission: 5%
       // Betting period: Blocks (0, 4)
       // Publishing period: Blocks [4, 5)
       // Claiming period: Blocks [5, 7)
       // Ending period: Blocks [7, ∞)
 
       // Block 0
-      broker = await Broker.new(3, 4, 5, 7, {from: owner});
+      broker = await Broker.new(5, 3, 4, 5, 7, {from: owner});
       // Block 1
       await broker.bet('0x41', {from: first_gambler, value: e_bet})
       // Block 2
@@ -621,13 +671,14 @@ contract('BetCycleBasic', function (
     const e_bet = 1000000000000000000;
 
     beforeEach(async function () {
+      // Commission: 5%
       // Betting period: Blocks (0, 2)
       // Publishing period: Blocks [2, 3)
       // Claiming period: Blocks [3, 4)
       // Ending period: Blocks [4, ∞)
 
       // Block 0
-      broker = await Broker.new(1, 2, 3, 4, {from: owner});
+      broker = await Broker.new(5, 1, 2, 3, 4, {from: owner});
       // Block 1
       await broker.bet('0x41', {from: first_gambler, value: e_bet})
       // Block 2
@@ -654,13 +705,14 @@ contract('BetCycleBasic', function (
     const e_bet = 1000000000000000000;
 
     beforeEach(async function () {
+      // Commission: 5%
       // Betting period: Blocks (0, 2)
       // Publishing period: Blocks [2, 3)
       // Claiming period: Blocks [3, 4)
       // Ending period: Blocks [4, ∞)
 
       // Block 0
-      broker = await Broker.new(1, 2, 3, 4, {from: owner});
+      broker = await Broker.new(5, 1, 2, 3, 4, {from: owner});
       // Block 1
       await broker.bet('0x41', {from: first_gambler, value: e_bet})
     });

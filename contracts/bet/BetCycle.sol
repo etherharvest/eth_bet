@@ -10,6 +10,8 @@ import "../bet/BetCycleBasic.sol";
 contract BetCycle is BetCycleBasic {
   /**
    * @dev Given offsets, starts a betting cycle.
+   *
+   * @param commission Commission of the contract.
    * @param bettingOffset Betting offset from the creation block.
    * @param publishingOffset Result publishing offset. Must be greater than
    * bettingOffset.
@@ -19,11 +21,13 @@ contract BetCycle is BetCycleBasic {
    * Must be greater than the claimingOffset.
    */
   constructor(
+    uint8 commission,
     uint256 bettingOffset,
     uint256 publishingOffset,
     uint256 claimingOffset,
     uint256 endingOffset
   ) public BetCycleBasic(
+      commission,
       bettingOffset,
       publishingOffset,
       claimingOffset,

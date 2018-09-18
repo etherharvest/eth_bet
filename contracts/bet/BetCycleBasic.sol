@@ -65,6 +65,14 @@ contract BetCycleBasic is Ownable {
     uint256 prize
   );
 
+  /////////////
+  // Commission
+
+  /**
+   * @dev Prize base percentage.
+   */
+  uint8 public prizeBase;
+
   //////////////////
   // Betting periods
 
@@ -246,6 +254,8 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Given offsets, starts a betting cycle.
+   *
+   * @param commission Commission of the contract.
    * @param bettingOffset Betting offset from the creation block.
    * @param publishingOffset Result publishing offset. Must be greater than
    * bettingOffset.
@@ -255,11 +265,16 @@ contract BetCycleBasic is Ownable {
    * Must be greater than the claimingOffset.
    */
   constructor(
+    uint8 commission,
     uint256 bettingOffset,
     uint256 publishingOffset,
     uint256 claimingOffset,
     uint256 endingOffset
   ) public {
+    require(
+      commission <= 100,
+      "Commission cannot exceed 100%."
+    );
     require(
       bettingOffset < publishingOffset,
       "The publishing offset must be greater than the betting offset."
@@ -273,6 +288,7 @@ contract BetCycleBasic is Ownable {
       "The ending offset must be greater than the claiming offset."
     );
 
+    prizeBase = 100 - commission;
     bettingBlock = block.number.add(bettingOffset);
     publishingBlock = block.number.add(publishingOffset);
     claimingBlock = block.number.add(claimingOffset);
@@ -383,15 +399,15 @@ contract BetCycleBasic is Ownable {
       "Outcome cannot be empty."
     );
 
-    outcome = _outcome;
-
     uint256 totalPool = address(this).balance;
-    if ( 0 < winnerPool && winnerPool <= totalPool ) {
-      payout = totalPool.mul(95).div(winnerPool);
-    } else {
-      payout = 0;
+
+    if ( winnerPool == totalPool ) {
+      return true;
+    } else if ( 0 < winnerPool && winnerPool < totalPool ) {
+      payout = totalPool.mul(prizeBase).div(winnerPool);
     }
 
+    outcome = _outcome;
     emit Outcome(outcome, payout);
 
     return true;
