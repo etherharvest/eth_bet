@@ -6,13 +6,14 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 /**
  * @title BetCycleBasic
- * @dev Basic bet cycle contract..
+ * @dev Basic bet cycle contract.
  */
 contract BetCycleBasic is Ownable {
   using SafeMath for uint256;
 
   /**
    * @dev Event triggered on successful betting.
+   *
    * @param gambler Gambler address.
    * @param prediction Prediction.
    * @param bet Amount of money bet.
@@ -25,6 +26,7 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Event triggered when a bet is cancelled.
+   *
    * @param gambler Gambler address.
    * @param prediction Prediction.
    * @param bet Amount of money bet.
@@ -37,6 +39,7 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Event triggered when the outcome of the bet has been set.
+   *
    * @param outcome Outcome.
    * @param payout Prize per wei.
    */
@@ -47,6 +50,7 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Event triggered when a gambler requested a refund.
+   *
    * @param gambler Gambler address.
    * @param amount Amount returned.
    */
@@ -57,6 +61,7 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Event triggered when a prize has been claimed.
+   *
    * @param winner Winner address.
    * @param prize Prized amount.
    */
@@ -303,7 +308,9 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Gets the prediction of a gambler.
+   *
    * @param gambler Address of the gambler.
+   *
    * @return Prediction of the gambler.
    */
   function getPrediction(address gambler) public view returns (bytes32) {
@@ -312,7 +319,9 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Gets the amount bet by a gambler.
+   *
    * @param gambler Address of the gambler
+   *
    * @return Amount of Ether bet.
    */
   function getBet(address gambler) public view returns (uint256) {
@@ -321,7 +330,9 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Gets amount of support for a bet.
+   *
    * @param prediction Prediction.
+   *
    * @return Prediction support.
    */
   function getSupport(bytes32 prediction) public view returns (uint256) {
@@ -333,7 +344,9 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Bets an amount of Ether on a prediction.
+   *
    * @param prediction Prediction.
+   *
    * @return Whether the bet was set or not.
    */
   function bet(bytes32 prediction)
@@ -358,6 +371,7 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Cancels a bet returning the bet Ether to the sender.
+   *
    * @return Whether the bet was cancelled or not.
    */
   function cancelBet()
@@ -387,7 +401,9 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Sets outcome of the bet.
+   *
    * @param _outcome Outcome of the bet.
+   *
    * @return Whether the outcome has been set or not.
    */
   function setOutcome(bytes32 _outcome)
@@ -418,6 +434,7 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Refunds the ether when the outcome is not set on time.
+   *
    * @return Whether the ether was returned or not.
    */
   function refund() public hasBet hasNoOutcome hasNotClaimed returns (bool) {
@@ -439,6 +456,7 @@ contract BetCycleBasic is Ownable {
 
   /**
    * @dev Sends the prize to the winner.
+   *
    * @return Whether the prize was transferred or not.
    */
   function claim()
@@ -462,6 +480,9 @@ contract BetCycleBasic is Ownable {
   /**
    * @dev Ends bet cycle by sending the balance of the contract to the
    * destination address.
+   *
+   * @param destination Destination address.
+   *
    * @return Whether the balance could be sent or not.
    */
   function endBetCycle(address destination)

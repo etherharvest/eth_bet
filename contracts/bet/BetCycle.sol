@@ -39,7 +39,9 @@ contract BetCycle is BetCycleBasic {
 
   /**
    * @dev Sets a new prediction.
+   *
    * @param newPrediction New prediction.
+   *
    * @return Whether the prediction has been changed or not.
    */
   function changePrediction(bytes32 newPrediction)
@@ -73,6 +75,7 @@ contract BetCycle is BetCycleBasic {
 
   /**
    * @dev Increases bet.
+   *
    * @return Whether the bet has been increased or not.
    */
   function increaseBet()
@@ -97,7 +100,9 @@ contract BetCycle is BetCycleBasic {
 
   /**
    * @dev Decreases bet by an amount.
+   *
    * @param amount Amount to be decreased from the original bet.
+   *
    * @return Whether the bet has been increased or not.
    */
   function decreaseBet(uint256 amount)
